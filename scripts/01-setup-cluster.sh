@@ -48,6 +48,17 @@ echo ""
 echo "Waiting for cluster to be ready..."
 kubectl wait --for=condition=Ready nodes --all --timeout=120s
 
+# cloud-provider-kind: enables LoadBalancer support in kind
+echo ""
+echo "Installing cloud-provider-kind (LoadBalancer support)..."
+if ! command -v cloud-provider-kind &> /dev/null; then
+    brew install cloud-provider-kind 2>/dev/null || \
+    go install sigs.k8s.io/cloud-provider-kind@latest 2>/dev/null || \
+    echo "⚠️  cloud-provider-kind 설치 실패. 수동 설치: https://github.com/kubernetes-sigs/cloud-provider-kind"
+fi
+nohup cloud-provider-kind > /tmp/cloud-provider-kind.log 2>&1 &
+echo "cloud-provider-kind PID: $! (log: /tmp/cloud-provider-kind.log)"
+
 echo ""
 echo "=== Cluster Info ==="
 kubectl cluster-info

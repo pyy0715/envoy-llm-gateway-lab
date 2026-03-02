@@ -1,12 +1,15 @@
-apiVersion: inference.networking.x-k8s.io/v1alpha2
+apiVersion: inference.networking.k8s.io/v1
 kind: InferencePool
 metadata:
   name: vllm-smol
   namespace: default
 spec:
-  targetPortNumber: 8000
+  targetPorts:
+    - number: 8000
   selector:
-    app: vllm-smol
-  extensionRef:
+    matchLabels:
+      app: vllm-smol
+  endpointPickerRef:
     name: vllm-smol-epp
-    portNumber: 9002
+    port:
+      number: 9002

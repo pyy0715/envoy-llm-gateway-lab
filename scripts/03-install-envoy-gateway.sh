@@ -19,11 +19,22 @@ echo "Envoy Gateway : $ENVOY_GATEWAY_VERSION"
 echo "AI Gateway values : $AI_GATEWAY_VERSION"
 echo ""
 
+# CRDs must be installed explicitly (helm upgrade does not install new CRDs)
+echo "[0/1] Installing Envoy Gateway CRDs..."
+helm template eg oci://docker.io/envoyproxy/gateway-helm \
+  --version "$ENVOY_GATEWAY_VERSION" \
+  --include-crds \
+  --namespace "$NAMESPACE" \
+  --create-namespace \
+  -f "https://raw.githubusercontent.com/envoyproxy/ai-gateway/${AI_GATEWAY_VERSION}/manifests/envoy-gateway-values.yaml" \
+  -f "https://raw.githubusercontent.com/envoyproxy/ai-gateway/${AI_GATEWAY_VERSION}/examples/inference-pool/envoy-gateway-values-addon.yaml" \
+  | kubectl apply --server-side -f - 2>&1 | grep -E 'created|configured|unchanged|error' || true
+echo ""
+
 helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
   --version "$ENVOY_GATEWAY_VERSION" \
   --namespace "$NAMESPACE" \
   --create-namespace \
-  --skip-crds \
   -f "https://raw.githubusercontent.com/envoyproxy/ai-gateway/${AI_GATEWAY_VERSION}/manifests/envoy-gateway-values.yaml" \
   -f "https://raw.githubusercontent.com/envoyproxy/ai-gateway/${AI_GATEWAY_VERSION}/examples/inference-pool/envoy-gateway-values-addon.yaml"
 
