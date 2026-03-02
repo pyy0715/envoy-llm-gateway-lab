@@ -4,12 +4,12 @@ Gateway API Inference Extension의 스마트 라우팅을 테스트하는 환경
 
 ## 구성
 
-| 컴포넌트 | 이미지 | 설명 |
+| 컴포넌트 | 이미지 | 모델 |
 |---------|--------|------|
-| Backend (Qwen) | `ghcr.io/llm-d/llm-d-inference-sim:dev` | 시뮬레이터 |
-| Backend (SmolLM) | `vllm/vllm-openai:latest` | 실제 vLLM |
-| EPP | `registry.k8s.io/gateway-api-inference-extension/epp:v1.3.1` | 엔드포인트 피커 |
-| Envoy Gateway | - | 데이터 플레인 |
+| Backend (Qwen) | `llm-d-inference-sim` | Qwen3-0.6B |
+| Backend (SmolLM) | `llm-d-inference-sim` | SmolLM2-1.7B |
+| EPP | `epp:v1.3.1` | - |
+| Envoy Gateway | - | - |
 
 ## 라우팅 로직
 
