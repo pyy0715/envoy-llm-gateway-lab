@@ -17,7 +17,7 @@ fi
 # Delete Kubernetes resources
 echo "Deleting Kubernetes resources..."
 kubectl delete -f "$PROJECT_DIR/k8s/ai-gateway/" --ignore-not-found
-kubectl delete -f "$PROJECT_DIR/k8s/inference-pool/pool-qwen/" --ignore-not-found
+kubectl delete -f "$PROJECT_DIR/k8s/inference-pool/qwen/" --ignore-not-found
 kubectl delete -f "$PROJECT_DIR/k8s/backend/vllm-qwen.yaml" --ignore-not-found
 kubectl delete -f "$PROJECT_DIR/k8s/monitoring/vllm-dashboard.yaml" --ignore-not-found
 

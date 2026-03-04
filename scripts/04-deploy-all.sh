@@ -18,7 +18,7 @@ kubectl wait --for=condition=Ready pods -l app=vllm-qwen --timeout=600s
 # InferencePool + EPP
 echo ""
 echo "[2/3] Deploying InferencePool + EPP..."
-kubectl apply -f "$PROJECT_DIR/k8s/inference-pool/pool-qwen/"
+kubectl apply -f "$PROJECT_DIR/k8s/inference-pool/qwen/"
 kubectl wait --for=condition=Available deployment/vllm-qwen-epp --timeout=300s
 
 # AI Gateway
