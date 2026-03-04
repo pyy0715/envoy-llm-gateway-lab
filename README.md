@@ -26,13 +26,18 @@ This lab demonstrates how EPP routes requests based on real-time vLLM metrics:
 
 ## Requirements
 
-- **Architecture**: x86_64
-- **RAM**: 4 GiB (2 replicas) or 2 GiB (1 replica)
+- **Architecture**: x86_64 with AVX512 support
+- **RAM**: 8 GiB (2 replicas) or 4 GiB (1 replica)
 - **Storage**: 10 GB
-- **OS**: Ubuntu 22.04+ or similar Linux
+- **OS**: Ubuntu 22.04+ or Amazon Linux 2023
+
+> [!IMPORTANT]
+> vLLM CPU pre-built images require AVX512. **AWS c6i/m6i** (Intel Ice Lake) or **GCP n2-standard** (Intel Cascade Lake+) required.
+>
+> DigitalOcean and other providers may not expose AVX512 to VMs, causing `Illegal instruction` error.
 
 > [!TIP]
-> Budget instances: AWS t3.large, GCP e2-standard-2 (~$0.08-0.10/hr)
+> Recommended: **AWS c6i.large** (2 vCPU, 4 GiB) ~$0.085/hr, or **c6i.xlarge** (4 vCPU, 8 GiB) ~$0.17/hr
 
 ## Quick Start
 
