@@ -70,6 +70,7 @@ helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheu
   --set prometheus.prometheusSpec.additionalScrapeConfigsSecret.key=additional-scrape-configs.yaml \
   --set grafana.adminPassword=admin \
   --set grafana.service.type=LoadBalancer \
+  --set grafana.service.port=3000 \
   --set grafana.sidecar.dashboards.enabled=true \
   --set grafana.sidecar.dashboards.label=grafana_dashboard \
   --timeout 10m
