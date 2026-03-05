@@ -16,7 +16,7 @@ echo ""
 
 # InferencePool CRDs
 echo "[1/2] InferencePool CRDs..."
-kubectl apply --server-side \
+kubectl apply --server-side --force-conflicts \
   -f "https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${INFERENCE_EXTENSION_VERSION}/manifests.yaml"
 kubectl wait --for=condition=Established crd/inferencepools.inference.networking.k8s.io --timeout=60s
 kubectl wait --for=condition=Established crd/inferenceobjectives.inference.networking.x-k8s.io --timeout=60s

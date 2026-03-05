@@ -1,7 +1,7 @@
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
+apiVersion: aigateway.envoyproxy.io/v1alpha1
+kind: AIGatewayRoute
 metadata:
-  name: llm-route
+  name: ai-gateway-route
   namespace: default
 spec:
   parentRefs:
@@ -10,11 +10,10 @@ spec:
       group: gateway.networking.k8s.io
   rules:
     - matches:
-        - path:
-            type: PathPrefix
-            value: /v1
-      timeouts:
-        request: 300s
+        - headers:
+            - type: Exact
+              name: x-ai-eg-model
+              value: Qwen/Qwen3-0.6B
       backendRefs:
         - group: inference.networking.k8s.io
           kind: InferencePool
