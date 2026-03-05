@@ -55,7 +55,10 @@ helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
   --set config.envoyGateway.extensionManager.hooks.xdsTranslator.post[2]=Route \
   --set config.envoyGateway.extensionManager.service.fqdn.hostname=ai-gateway-controller.envoy-ai-gateway-system.svc.cluster.local \
   --set config.envoyGateway.extensionManager.service.fqdn.port=1063 \
-  --set config.envoyGateway.extensionApis.enableBackend=true
+  --set config.envoyGateway.extensionApis.enableBackend=true \
+  --set 'config.envoyGateway.extensionManager.backendResources[0].group=inference.networking.k8s.io' \
+  --set 'config.envoyGateway.extensionManager.backendResources[0].version=v1' \
+  --set 'config.envoyGateway.extensionManager.backendResources[0].kind=InferencePool'
 
 kubectl wait --timeout=5m -n envoy-gateway-system deployment/envoy-gateway --for=condition=Available
 
