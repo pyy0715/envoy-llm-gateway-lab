@@ -19,6 +19,7 @@ kubectl apply -f "$PROJECT_DIR/k8s/monitoring/prometheus-scrape-config.yaml"
 # Install kube-prometheus-stack
 helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
   --namespace monitoring \
+  --set prometheus.prometheusSpec.additionalScrapeConfigsSecret.enabled=true \
   --set prometheus.prometheusSpec.additionalScrapeConfigsSecret.name=kube-prometheus-stack-additional-scrape-config \
   --set prometheus.prometheusSpec.additionalScrapeConfigsSecret.key=additional-scrape-configs.yaml \
   --set grafana.adminPassword=admin \
