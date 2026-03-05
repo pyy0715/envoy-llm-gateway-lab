@@ -1,160 +1,118 @@
-# AI Gateway with vLLM GPU
+# Envoy AI Gateway + vLLM Semantic Router Lab
 
-Understanding Gateway API Inference Extension's EPP (Endpoint Picker) smart routing behavior using vLLM GPU metrics.
+Envoy AI Gateway와 vLLM Semantic Router를 Kubernetes에서 통합하는 환경 구성 및 EPP 스마트 라우팅 분석.
 
-> [!IMPORTANT]
-> **NVIDIA GPU required.** This lab requires a GPU node with `nvidia-container-toolkit` installed.
+## Architecture
 
-## Purpose
+```mermaid
+graph LR
+    Client -->|HTTP| EG[Envoy Gateway]
+    EG -->|ext_proc gRPC| EPP[EPP - Endpoint Picker]
+    EG --> AIEG[AI Gateway Controller]
+    AIEG -->|AIGatewayRoute → HTTPRoute| EG
+    EPP -->|Score & Pick| Pool[InferencePool]
+    Pool --> PodA[vLLM Pod A]
+    Pool --> PodB[vLLM Pod B]
+    Pool --> PodN[vLLM Pod N]
 
-This lab demonstrates how EPP routes requests based on real-time vLLM metrics:
-- **Queue-based routing**: Direct requests to pods with fewer queued requests
-- **KV-cache routing**: Balance load based on GPU KV cache utilization
-- **Prefix-cache routing**: Optimize for cache hits
+    subgraph Scoring
+        EPP --> S1[KV-Cache Scorer]
+        EPP --> S2[Queue Scorer]
+        EPP --> S3[Prefix Cache Scorer]
+    end
 
-> [!NOTE]
-> This is for learning EPP routing behavior, not production performance testing.
+    PodA -.->|/metrics| EPP
+    PodB -.->|/metrics| EPP
+    PodN -.->|/metrics| EPP
+```
 
 ## Components
 
-| Component | Image / Version |
-|-----------|-----------------|
-| vLLM GPU | `vllm/vllm-openai:v0.9.0` |
-| EPP | `registry.k8s.io/gateway-api-inference-extension/epp:v1.3.1` |
-| Envoy Gateway | `v1.6.3` |
-| AI Gateway | `v0.5.0` |
-| Monitoring | `kube-prometheus-stack` |
-
-## Requirements
-
-- **GPU**: NVIDIA GPU with `nvidia-container-toolkit` installed
-- **RAM**: 16 GiB+ recommended
-- **Storage**: 20 GB
-- **OS**: Ubuntu 22.04+ or similar Linux with NVIDIA drivers
-
-> [!TIP]
-> **DigitalOcean GPU Droplet** or any single-node GPU instance with k3s works well for this lab.
-> The vLLM deployment requests `nvidia.com/gpu: 1` per replica (2 replicas by default).
+| Component | Role |
+|-----------|------|
+| **Envoy Gateway** | Core traffic management, L7 proxy |
+| **AI Gateway Controller** | `AIGatewayRoute` → `HTTPRoute` 변환, LLM provider 추상화 |
+| **Semantic Router** | 요청 의미 기반 라우팅, 카테고리 분류 |
+| **EPP (Endpoint Picker)** | 실시간 메트릭 기반 Pod 선택 (ext_proc) |
+| **InferencePool** | vLLM Pod 그룹 + EPP 연결 정의 |
+| **vLLM** | OpenAI-compatible LLM serving, GPU metrics 노출 |
 
 ## Quick Start
 
-```bash
-sudo apt update && sudo apt install -y curl wget git
-
-git clone https://github.com/pyy0715/envoy-llm-gateway-lab.git
-cd envoy-llm-gateway-lab
-
-export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-
-./scripts/01-setup-cluster.sh          # k3s + Helm + Envoy Gateway
-./scripts/02-install-monitoring.sh     # kube-prometheus-stack
-./scripts/03-install-ai-gateway.sh     # AI Gateway CRDs
-./scripts/04-deploy-all.sh             # vLLM GPU + EPP + Gateway
-```
-
-## Test
+> 전체 설치 가이드는 [docs/INSTALLATION.md](docs/INSTALLATION.md) 참조.
 
 ```bash
-# EPP smart routing verification (requires 2 vLLM replicas)
-./test/smart-routing-test.sh
+# 1. Kind cluster
+kind create cluster --name semantic-router-cluster
+
+# 2. Semantic Router
+helm install semantic-router oci://ghcr.io/vllm-project/charts/semantic-router \
+  --version v0.0.0-latest \
+  --namespace vllm-semantic-router-system --create-namespace \
+  -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/semantic-router-values/values.yaml
+
+# 3. Envoy Gateway
+helm upgrade -i eg oci://docker.io/envoyproxy/gateway-helm \
+  --version v0.0.0-latest \
+  --namespace envoy-gateway-system --create-namespace \
+  -f https://raw.githubusercontent.com/envoyproxy/ai-gateway/main/manifests/envoy-gateway-values.yaml
+
+# 4. AI Gateway
+helm upgrade -i aieg oci://docker.io/envoyproxy/ai-gateway-helm \
+  --version v0.0.0-latest --namespace envoy-ai-gateway-system --create-namespace
+helm upgrade -i aieg-crd oci://docker.io/envoyproxy/ai-gateway-crds-helm \
+  --version v0.0.0-latest --namespace envoy-ai-gateway-system
+
+# 5. Demo LLM + Gateway Resources
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/aigw-resources/base-model.yaml
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml
 ```
 
-## API Access
+## EPP Scoring Overview
 
-```bash
-GATEWAY_IP=$(kubectl get gateway ai-gateway -o jsonpath='{.status.addresses[0].value}')
+> 전체 소스코드 분석은 [docs/EPP_SCORING.md](docs/EPP_SCORING.md) 참조.
 
-# List models
-curl http://$GATEWAY_IP:8888/v1/models
+EPP는 요청마다 3개 scorer의 가중 합산 점수로 최적의 Pod을 선택합니다:
 
-# Chat completion
-curl -X POST http://$GATEWAY_IP:8888/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{"model": "Qwen/Qwen3-0.6B", "messages": [{"role": "user", "content": "Hello"}], "max_tokens": 50}'
+```mermaid
+flowchart TD
+    R[Request] --> F[Filter unhealthy pods]
+    F --> S["Score (parallel)"]
+    S --> KV["KV-Cache Scorer<br/><code>1 - usage_percent</code>"]
+    S --> Q["Queue Scorer<br/><code>(max - my) / (max - min)</code>"]
+    S --> P["Prefix Cache Scorer<br/><code>matched_blocks / total_blocks</code>"]
+    KV --> W[Weighted Sum]
+    Q --> W
+    P --> W
+    W --> Pick[Pick highest score Pod]
 ```
 
-## Monitoring
+| Scorer | Input Metric | Formula | Characteristic |
+|--------|-------------|---------|----------------|
+| **KV-Cache** | `vllm:gpu_cache_usage_perc` | `1 - usage` | Absolute, stateless |
+| **Queue** | `vllm:num_requests_waiting` | `(max-my)/(max-min)` | Relative, min-max normalized |
+| **Prefix Cache** | Request prompt content | `matchBlocks/totalBlocks` | Content-aware, stateful (LRU) |
 
-```bash
-# Get Grafana address
-kubectl get svc -n monitoring kube-prometheus-stack-grafana
+### Routing Decision Example
 
-# Access: http://<EXTERNAL-IP>:3000 (admin/admin)
-# Dashboard: "EPP Smart Routing"
-```
+| | Pod A (busy, cached) | Pod B (idle, cold) |
+|---|---|---|
+| KV-Cache | 0.3 | 0.8 |
+| Queue | 1.0 (queue=2, min) | 0.0 (queue=8, max) |
+| Prefix | 0.9 (90% hit) | 0.0 |
+| **Total** | **2.2** ✅ | **0.8** |
 
-### Key Metrics (Success Criteria 3)
+Prefix cache + 짧은 큐가 KV-cache 부족을 상쇄 → **Pod A 선택**.
 
-```promql
-vllm:gpu_cache_usage_perc                        # GPU KV-Cache utilization (per pod)
-inference_pool_average_kv_cache_utilization       # EPP pool-level KV cache avg
-inference_pool_average_queue_size                 # EPP pool-level queue avg
-```
+## Documentation
 
-부하 테스트 중 위 3개 메트릭이 비제로(non-zero)로 표시되면 성공.
-
-## EPP Smart Routing
-
-EPP routes requests based on real-time metrics:
-
-| Scorer | Description |
-|--------|-------------|
-| `queue-scorer` | Prefer pods with fewer queued requests |
-| `kv-cache-utilization-scorer` | Prefer pods with lower GPU KV-cache usage |
-| `prefix-cache-scorer` | Prefer pods with prefix cache hits (requires `--enable-prefix-caching`) |
-
-### Verify Routing
-
-```bash
-# EPP logs — look for scheduling decisions
-kubectl logs -l app=vllm-qwen-epp --tail=100
-
-# Run the smart routing test to see EPP in action
-./test/smart-routing-test.sh
-```
-
-## Structure
-
-```
-k8s/
-├── ai-gateway/           # GatewayClass, Gateway, EnvoyProxy, BackendTrafficPolicy
-│   ├── gateway.yaml
-│   └── ai-gateway-route.yaml
-├── backend/              # vLLM GPU deployment + headless Service
-│   └── vllm-qwen.yaml
-├── inference-pool/       # EPP + InferencePool
-│   └── qwen/
-│       ├── epp-config.yaml
-│       ├── epp-deployment.yaml
-│       ├── epp-rbac.yaml
-│       ├── inference-objective.yaml
-│       └── inference-pool.yaml
-└── monitoring/           # Prometheus scrape config + Grafana dashboard
-    ├── prometheus-scrape-config.yaml
-    └── epp-routing-dashboard.yaml
-scripts/
-├── 01-setup-cluster.sh       # k3s + Helm + Envoy Gateway
-├── 02-install-monitoring.sh  # kube-prometheus-stack + dashboards
-├── 03-install-ai-gateway.sh  # Inference Extension CRDs + AI Gateway
-├── 04-deploy-all.sh          # vLLM + EPP + Gateway resources
-└── 99-cleanup.sh
-test/
-└── smart-routing-test.sh     # EPP smart routing verification
-docs/
-└── troubleshooting.md
-```
-
-## Cleanup
-
-```bash
-./scripts/99-cleanup.sh
-
-# Uninstall k3s completely
-/usr/local/bin/k3s-uninstall.sh
-```
+| Document | Description |
+|----------|-------------|
+| [docs/INSTALLATION.md](docs/INSTALLATION.md) | 전체 설치 가이드 (Step-by-step) |
+| [docs/EPP_SCORING.md](docs/EPP_SCORING.md) | EPP Scorer 소스코드 분석 (v1.3.1) |
 
 ## References
 
-- [Gateway API Inference Extension](https://github.com/kubernetes-sigs/gateway-api-inference-extension)
+- [vLLM Semantic Router - AI Gateway Installation](https://vllm-semantic-router.com/docs/installation/k8s/ai-gateway)
+- [Gateway API Inference Extension v1.3.1](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/v1.3.1)
 - [Envoy AI Gateway](https://github.com/envoyproxy/ai-gateway)
-- [vLLM Documentation](https://docs.vllm.ai/)
