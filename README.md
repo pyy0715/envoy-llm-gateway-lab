@@ -55,13 +55,7 @@ export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 ## Test
 
 ```bash
-# API connectivity test
-./test/test-api.sh
-
-# Load test with EPP routing
-./test/load-test.sh 30 10  # 30 requests, 10 concurrent
-
-# Smart routing verification (requires 2 vLLM replicas)
+# EPP smart routing verification (requires 2 vLLM replicas)
 ./test/smart-routing-test.sh
 ```
 
@@ -145,8 +139,6 @@ scripts/
 ├── 04-deploy-all.sh          # vLLM + EPP + Gateway resources
 └── 99-cleanup.sh
 test/
-├── test-api.sh               # Basic API connectivity test
-├── load-test.sh              # Concurrent load test
 └── smart-routing-test.sh     # EPP smart routing verification
 docs/
 └── troubleshooting.md

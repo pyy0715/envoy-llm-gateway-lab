@@ -70,7 +70,6 @@ spec:
             - --dtype=auto
             - --max-model-len=2048
             - --enable-prefix-caching
-            - --api-key=
           env:
             - name: POD_NAME
               valueFrom:

@@ -26,25 +26,27 @@ if [ "$POD_COUNT" -lt 2 ]; then
     echo ""
 fi
 
-# Helper: get per-pod queue metrics
+# Helper: get per-pod queue metrics (single fetch per pod)
 pod_metrics() {
     for pod in $PODS; do
-        RUNNING=$(kubectl exec $pod -- curl -sf localhost:8000/metrics 2>/dev/null \
-            | grep "^vllm:num_requests_running{" | awk '{print $2}' | head -1 || echo "?")
-        WAITING=$(kubectl exec $pod -- curl -sf localhost:8000/metrics 2>/dev/null \
-            | grep "^vllm:num_requests_waiting{" | awk '{print $2}' | head -1 || echo "?")
-        KV=$(kubectl exec $pod -- curl -sf localhost:8000/metrics 2>/dev/null \
-            | grep "^vllm:gpu_cache_usage_perc{" | awk '{print $2}' | head -1 || echo "?")
-        printf "  %-50s running=%-3s waiting=%-3s kv_cache=%s\n" "$pod" "$RUNNING" "$WAITING" "$KV"
+        METRICS=$(kubectl exec $pod -- python3 -c "
+import urllib.request, sys
+try:
+    r = urllib.request.urlopen('http://localhost:8000/metrics', timeout=5)
+    sys.stdout.write(r.read().decode())
+except Exception:
+    pass
+" 2>/dev/null || true)
+        RUNNING=$(echo "$METRICS" | grep "^vllm:num_requests_running{" | awk '{print $2}' | head -1)
+        WAITING=$(echo "$METRICS" | grep "^vllm:num_requests_waiting{" | awk '{print $2}' | head -1)
+        KV=$(echo "$METRICS" | grep "^vllm:gpu_cache_usage_perc{" | awk '{print $2}' | head -1)
+        printf "  %-50s running=%-3s waiting=%-3s kv_cache=%s\n" "$pod" "${RUNNING:-?}" "${WAITING:-?}" "${KV:-?}"
     done
 }
 
 echo "--- [1] Baseline Pod Metrics ---"
 pod_metrics
 echo ""
-
-# Clear EPP logs baseline
-EPP_LOG_START=$(kubectl logs -l app=vllm-qwen-epp --tail=1 2>/dev/null | wc -l || echo "0")
 
 echo "--- [2] Phase 1: Saturate with SLOW requests (max_tokens=2048) ---"
 echo "Sending 20 slow concurrent requests to build up queue depth on GPU..."
