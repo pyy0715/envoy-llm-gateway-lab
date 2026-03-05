@@ -577,7 +577,7 @@ data:
           "targets": [
             {
               "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
-              "expr": "vllm:cpu_cache_usage_perc",
+              "expr": "vllm:gpu_cache_usage_perc",
               "legendFormat": "{{pod}}",
               "refId": "A"
             }
