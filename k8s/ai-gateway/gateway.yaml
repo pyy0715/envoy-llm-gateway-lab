@@ -40,3 +40,18 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: ai-gateway-timeout
+  namespace: default
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: ai-gateway
+  timeout:
+    http:
+      requestTimeout: 10m
+      connectionIdleTimeout: 15m
